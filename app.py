@@ -1,26 +1,31 @@
 from flask import Flask, render_template, request, redirect, flash
-import sqlite3
+import psycopg2
 from datetime import datetime
 import smtplib
 import schedule
 import time
 import threading
+import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-# Initialize SQLite Database
-DB_PATH = "database.db"
+# Get PostgreSQL database URL from environment variable
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
+
+# Initialize PostgreSQL Database
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS birthdays (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             email TEXT NOT NULL,
-            date TEXT NOT NULL
+            date DATE NOT NULL
         )
     """)
     conn.commit()
@@ -44,9 +49,9 @@ def send_email(name, email):
 # Function to check for birthdays
 def check_birthdays():
     today = datetime.now().strftime("%Y-%m-%d")
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT name, email FROM birthdays WHERE date = ?", (today,))
+    cursor.execute("SELECT name, email FROM birthdays WHERE date = %s", (today,))
     rows = cursor.fetchall()
     conn.close()
 
@@ -75,9 +80,9 @@ def add_birthday():
     email = request.form['email']
     date = request.form['date']
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO birthdays (name, email, date) VALUES (?, ?, ?)", (name, email, date))
+    cursor.execute("INSERT INTO birthdays (name, email, date) VALUES (%s, %s, %s)", (name, email, date))
     conn.commit()
     conn.close()
 
